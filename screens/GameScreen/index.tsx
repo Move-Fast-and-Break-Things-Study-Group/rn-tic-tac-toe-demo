@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import Engine, { Cell, MakeMoveFn, OnMoveFn, State } from '../../game/Engine';
+import { GameMode } from '../WelcomeScreen';
 import GameBoard from './components/GameBoard';
 
 function getEndgameText(winner: Cell): string {
@@ -11,7 +12,11 @@ function getEndgameText(winner: Cell): string {
   }
 }
 
-export default function GameScreen() {
+interface GameScreenProps {
+  mode: GameMode;
+}
+
+export default function GameScreen({ mode }: GameScreenProps) {
   const [currentPlayerMakeMove, setCurrentPlayerMakeMove] = useState<MakeMoveFn>();
   const [currentPlayer, setCurrentPlayer] = useState<Cell.X | Cell.O>();
   const [currentState, setCurrentState] = useState<State>();
