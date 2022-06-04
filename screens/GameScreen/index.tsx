@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, Alert } from 'react-native';
 import Engine, { Cell, MakeMoveFn, OnMoveFn, State } from '../../game/Engine';
 import { GameMode } from '../WelcomeScreen';
 import GameBoard from './components/GameBoard';
@@ -63,6 +63,18 @@ export default function GameScreen({ mode }: GameScreenProps) {
     setCurrentState(engine.getState());
   }, [engine]);
 
+  const onCellPress = (x: number, y: number) => {
+    try {
+      currentPlayerMakeMove?.(x, y);
+    } catch (err) {
+      if (err instanceof Error) {
+        Alert.alert('Некорректный ход', err.message || err.toString());
+      } else {
+        Alert.alert('Некорректный ход', 'неожиданная ошибка');
+      }
+    }
+  };
+
   return (
     <View>
       <Text>Game Screen</Text>
@@ -71,12 +83,7 @@ export default function GameScreen({ mode }: GameScreenProps) {
         : <Text>{getEndgameText(winner)}</Text>
       }
       {currentState
-        ? (
-          <GameBoard
-            state={currentState}
-            onCellPress={(x, y) => currentPlayerMakeMove?.(x, y)}
-          />
-        )
+        ? <GameBoard state={currentState} onCellPress={onCellPress} />
         : <Text>Loading...</Text>
       }
     </View>

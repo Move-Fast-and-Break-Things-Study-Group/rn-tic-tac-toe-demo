@@ -58,6 +58,7 @@ export default class Engine {
   static BOARD_SIZE = 3;
 
   private state: State;
+  private isOver: boolean;
   private onPlayerXMove: OnMoveFn;
   private onPlayerOMove: OnMoveFn;
   private onGameEnd: OnEndFn;
@@ -73,6 +74,7 @@ export default class Engine {
       [Cell.Empty, Cell.Empty, Cell.Empty],
       [Cell.Empty, Cell.Empty, Cell.Empty],
     ];
+    this.isOver = false;
 
     if (playerOneSide === 'random') {
       const randomValue = Math.random();
@@ -95,7 +97,7 @@ export default class Engine {
   }
 
   startGame() {
-    const playerXMakeMove = (x: number, y: number) => this.makeMove(Cell.X, x, y);
+    const playerXMakeMove = this.getMakeMoveFn(Cell.X);
     this.onPlayerXMove(this.state, Cell.X, playerXMakeMove);
   }
 
@@ -144,24 +146,41 @@ export default class Engine {
     return { isOver: true, winner: Cell.Empty };
   }
 
-  private makeMove(type: Cell.X | Cell.O, x: number, y: number) {
-    if (this.state[x][y] !== Cell.Empty) {
-      throw new Error('Нельзя сделать ход в уже занятую клетку');
-    }
+  private getMakeMoveFn(type: Cell.X | Cell.O): MakeMoveFn {
+    let wasCalled = false;
 
+    return (x: number, y: number) => {
+      if (this.isOver) {
+        throw new Error('Нельзя сделать ход после окончания игры');
+      }
+      if (wasCalled) {
+        throw new Error('Нельзя делать ход два раза подряд');
+      }
+      if (this.state[x][y] !== Cell.Empty) {
+        throw new Error('Нельзя сделать ход в уже занятую клетку');
+      }
+
+      this.makeMove(type, x, y);
+
+      wasCalled = true;
+    };
+  }
+
+  private makeMove(type: Cell.X | Cell.O, x: number, y: number) {
     this.state[x][y] = type;
     
     const { isOver, winner } = this.isGameOver();
     if (isOver) {
+      this.isOver = true;
       this.onGameEnd(winner);
       return;
     }
 
     if (type === Cell.X) {
-      const playerOMakeMove = (x: number, y: number) => this.makeMove(Cell.O, x, y);
+      const playerOMakeMove = this.getMakeMoveFn(Cell.O);
       this.onPlayerOMove(this.state, Cell.O, playerOMakeMove);
     } else {
-      const playerXMakeMove = (x: number, y: number) => this.makeMove(Cell.X, x, y);
+      const playerXMakeMove = this.getMakeMoveFn(Cell.X);
       this.onPlayerXMove(this.state, Cell.X, playerXMakeMove);
     }
   }
