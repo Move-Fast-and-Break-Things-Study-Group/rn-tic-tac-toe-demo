@@ -28,15 +28,35 @@ export default function GameScreen({ mode }: GameScreenProps) {
     setCurrentPlayerMakeMove(() => makeMove);
   };
 
+  const onBotMove: OnMoveFn = (state, whoAmI, makeMove) => {
+    const emptyCells = [];
+    for (let x = 0; x < Engine.BOARD_SIZE; x++) {
+      for (let y = 0; y < Engine.BOARD_SIZE; y++) {
+        if (state[x][y] === Cell.Empty) {
+          emptyCells.push([x, y]);
+        }
+      }
+    }
+
+    const randomIndex = Math.floor(Math.random() * emptyCells.length);
+    const [x, y] = emptyCells[randomIndex];
+    makeMove(x, y);
+  };
+
   const onGameEnd = (winner: Cell) => {
     setWinner(winner);
   };
 
-  const [engine] = useState(() => new Engine(
-    onPlayerMove,
-    onPlayerMove,
-    onGameEnd,
-  ));
+  const [engine] = useState(() => {
+    const playerTwo = mode === 'pvplocal' ? onPlayerMove : onBotMove;
+
+    return new Engine(
+      onPlayerMove,
+      playerTwo,
+      onGameEnd,
+      'random'
+    );
+  });
 
   useEffect(() => {
     engine.startGame();
