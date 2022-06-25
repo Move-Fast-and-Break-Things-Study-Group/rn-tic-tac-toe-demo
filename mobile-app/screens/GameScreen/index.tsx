@@ -12,6 +12,21 @@ function getEndgameText(winner: Cell): string {
   }
 }
 
+const onBotMove: OnMoveFn = (state, whoAmI, makeMove) => {
+  const emptyCells = [];
+  for (let x = 0; x < Engine.BOARD_SIZE; x++) {
+    for (let y = 0; y < Engine.BOARD_SIZE; y++) {
+      if (state[x][y] === Cell.Empty) {
+        emptyCells.push([x, y]);
+      }
+    }
+  }
+
+  const randomIndex = Math.floor(Math.random() * emptyCells.length);
+  const [x, y] = emptyCells[randomIndex];
+  makeMove(x, y);
+};
+
 interface GameScreenProps {
   mode: GameMode;
 }
@@ -26,21 +41,6 @@ export default function GameScreen({ mode }: GameScreenProps) {
     setCurrentState(state);
     setCurrentPlayer(whoAmI);
     setCurrentPlayerMakeMove(() => makeMove);
-  };
-
-  const onBotMove: OnMoveFn = (state, whoAmI, makeMove) => {
-    const emptyCells = [];
-    for (let x = 0; x < Engine.BOARD_SIZE; x++) {
-      for (let y = 0; y < Engine.BOARD_SIZE; y++) {
-        if (state[x][y] === Cell.Empty) {
-          emptyCells.push([x, y]);
-        }
-      }
-    }
-
-    const randomIndex = Math.floor(Math.random() * emptyCells.length);
-    const [x, y] = emptyCells[randomIndex];
-    makeMove(x, y);
   };
 
   const onGameEnd = (winner: Cell) => {
