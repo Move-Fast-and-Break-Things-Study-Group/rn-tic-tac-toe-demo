@@ -1,76 +1,99 @@
 import Koa from 'koa';
 import Router from '@koa/router';
 import { v4 as uuidv4 } from 'uuid';
-import { Cell, State } from '../mobile-app/game/Engine';
+import bodyParser from 'koa-bodyparser';
 
 const app = new Koa();
 const router = new Router();
 
-const players: Record<string, string> = {};
-/*
-{
-  'player1': 'player2',
-  'player2': 'player1',
+interface MessageMove {
+  type: 'move';
+  move: [number, number];
+};
+
+interface MessageFirstMove {
+  type: 'first-move';
 }
- */
+
+interface MessageError {
+  type: 'error';
+  error: string;
+}
+
+type Message = MessageMove | MessageFirstMove | MessageError;
+
+interface ServerPlayer {
+  opponent: string;
+  pendingMessages: Message[];
+};
 
 const playersQueue: string[] = [];
 
+/**
+ * {
+ *   'player1': { opponent: 'player2', pendingMessages: [] },
+ *   'player2': { opponent: 'player1', pendingMessages: [] },
+ * }
+ */
+const players: Record<string, ServerPlayer> = {};
+
+function pairPlayers() {
+  if (playersQueue.length < 2) {
+    return;
+  }
+
+  const player1 = playersQueue.shift();
+  const player2 = playersQueue.shift();
+  if (!player1 || !player2) {
+    throw new Error('Invalid players queue');
+  }
+
+  players[player1] = {
+    opponent: player2,
+    pendingMessages: [],
+  };
+  players[player2] = {
+    opponent: player1,
+    pendingMessages: [],
+  };
+
+  const firstPlayer = Math.random() > 0.5 ? player1 : player2;
+  players[firstPlayer].pendingMessages.push({ type: 'first-move' });
+}
+
+const PAIR_PLAYERS_EVERY_MS = 250;
+
+setInterval(pairPlayers, PAIR_PLAYERS_EVERY_MS);
+
+// POST /register - регистрирует на сервере
 router.post('/register', ctx => {
   const newPlayerId = uuidv4();
-
   playersQueue.push(newPlayerId);
-
   ctx.body = newPlayerId;
 });
 
-interface PendingServerState {
-  status: 'pending';
-  isItMyTurn: false;
-}
+// GET /:playerId/state - возвращает сообщения от противника
+router.get('/:playerId/state', ctx => {
+  const serverPlayer = players[ctx.params.playerId];
+  if (!serverPlayer) {
+    ctx.body = { status: 'pending' };
+    return;
+  }
 
-interface StartedServerState {
-  status: 'started';
-  state: State;
-  whoAmI: Cell.X | Cell.O;
-  isItMyTurn: boolean;
-}
-
-interface FinishedServerState {
-  status: 'finished';
-  state: State;
-  whoAmI: Cell.X | Cell.O;
-  isItMyTurn: false;
-  winner: Cell.X | Cell.O;
-}
-
-type ServerState = PendingServerState | StartedServerState | FinishedServerState;
-
-router.get('/state', ctx => {
-  const state: ServerState = {
-    status: 'pending',
-    isItMyTurn: false,
+  ctx.body = {
+    status: 'started',
+    messages: serverPlayer.pendingMessages.splice(0),
   };
-
-  ctx.body = state;
 });
 
+// POST /:playerId/message - отправляет сообщение противнику
+router.post('/:playerId/message', ctx => {
+  const serverPlayer = players[ctx.params.playerId];
+  const message: Message = ctx.request.body;
+  players[serverPlayer.opponent].pendingMessages.push(message);
+  ctx.status = 200;
+});
+
+app.use(bodyParser());
 app.use(router.routes());
 app.listen(3000);
-
-// POST /register - регистрирует на сервере
-
-// GET /state - возвращает состояние игры - доска, кто ходит
-
-// POST /move - делает ход
-
-
-// 1. Приложение А шлёт POST /register, сервер присваивает приложению А ID и запоминает его
-// 2. Приложение Б шлёт POST /register, сервер присваивает приложению Б ID и запоминает его
-// 3. Сервер устанавливает пару между приложением А и Б и создаёт игру (внутри себя)
-// A. Приложение А и Б постоянно шлют GET /state раз в секунду, сервер возвращает доску и информацию о том, кто ходит
-// 4. Сервер отвечает приложению А о том, что сейчас его ход
-// Б. Приложение А позволяет игроку сделать ход и шлёт запрос POST /move с информацией о ходе
-// 5. Сервер обновляет внутреннее состояние и начинает по-новому отвечать на запросы GET /state, которые шлют приложения
-// 6. Сервер отвечает приложению Б о том, что сейчас его ход
-// В. Приложение Б позволяет игроку сделать ход и шлёт запрос POST /move с информацией о ходе
