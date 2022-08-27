@@ -27,6 +27,11 @@ interface ServerPlayer {
   pendingMessages: Message[];
 };
 
+export interface ServerState {
+  status: 'pending' | 'started';
+  messages: Message[];
+};
+
 const playersQueue: string[] = [];
 
 /**
