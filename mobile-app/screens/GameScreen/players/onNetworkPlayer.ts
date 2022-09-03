@@ -1,17 +1,19 @@
 import axios from 'axios';
 import { useQuery } from 'react-query';
-import { OnMoveFn } from '../../../game/Engine';
-import { ServerState } from '../../../../server/index';
+import Engine, { Cell, OnMoveFn, State } from '../../../game/Engine';
 
 const SERVER_URL = 'http://localhost:3000';
 
-function usePlayerId(gameId: string | undefined) {
-  return useQuery(
-    ['playerId', gameId],
-    ({ signal }) => {
-      if (!gameId) return;
+export const NETWORK_GAME_QUERY_CACHE_KEY = 'networkGame';
 
-      return axios.post(`${SERVER_URL}/register`, { signal });
+function usePlayerId(enabled: boolean) {
+  return useQuery(
+    [NETWORK_GAME_QUERY_CACHE_KEY, 'usePlayerId'],
+    async ({ signal }) => {
+      if (!enabled) return;
+
+      const response = await axios.post(`${SERVER_URL}/register`, { signal });
+      return response.data;
     },
     {
       cacheTime: Infinity,
@@ -22,34 +24,70 @@ function usePlayerId(gameId: string | undefined) {
   );
 }
 
-export function useNetworkGame(gameId: string | undefined) {
-  const { data: playerId, error, isError, isLoading } = usePlayerId(gameId);
+export function useNetworkGame(enabled: boolean) {
+  const { data: playerId, error, isError, isLoading } = usePlayerId(enabled);
 
   return useQuery(
-    ['networkGame', gameId],
-    ({ signal }) => {
+    [NETWORK_GAME_QUERY_CACHE_KEY, 'useNetworkGame'],
+    async ({ signal }) => {
       if (isError) throw error;
-      if (!playerId) return;
+      if (!playerId) throw new Error('Player ID is not defined');
 
-      return axios.get(`${SERVER_URL}/${playerId}/state`, { signal });
+      let response = await axios.get(`${SERVER_URL}/${playerId}/state`, { signal });
+      while (response.data?.status === 'pending') {
+        await new Promise(resolve => setTimeout(resolve, 250));
+        response = await axios.get(`${SERVER_URL}/${playerId}/state`, { signal });
+      }
+      return { ...response.data, playerId };
     },
     {
       enabled: !isLoading,
-      retry: false,
       cacheTime: Infinity,
+      retry: false,
       refetchOnMount: false,
       refetchOnWindowFocus: false,
-      refetchInterval: (data: ServerState | undefined) => {
-        if (data?.status === 'pending') {
-          return 250;
-        }
-        return false;
-      },
     },
   );
 }
 
-const onNetworkPlayer: OnMoveFn = (state, whoAmI, makeMove) => {
-};
+async function getNewMessages(playerId: string) {
+  let response = await axios.get(`${SERVER_URL}/${playerId}/state`);
+  while (!response.data.messages?.length) {
+    await new Promise(resolve => setTimeout(resolve, 250));
+    response = await axios.get(`${SERVER_URL}/${playerId}/state`);
+  }
+  return response.data.messages;
+}
 
-export default onNetworkPlayer;
+function getNetworkPlayer(playerId: string): OnMoveFn {
+  let previousState: State | undefined = undefined;
+
+  return (state, whoAmI, makeMove) => {
+    for (let i = 0; i < Engine.BOARD_SIZE; ++i) {
+      for (let j = 0; j < Engine.BOARD_SIZE; ++j) {
+        const foundNewMove = previousState
+          ? (state[i][j] !== previousState[i][j])
+          : (state[i][j] !== Cell.Empty);
+        if (foundNewMove && state[i][j] !== whoAmI) {
+          axios.post(`${SERVER_URL}/${playerId}/message`, {
+            type: 'move',
+            move: [i, j],
+          });
+          break;
+        }
+      }
+    }
+
+    previousState = [
+      [...state[0]],
+      [...state[1]],
+      [...state[2]],
+    ];
+
+    getNewMessages(playerId).then(messages => {
+      makeMove(...(messages[0].move as [number, number]));
+    });
+  };
+}
+
+export default getNetworkPlayer;

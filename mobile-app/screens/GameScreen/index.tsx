@@ -3,6 +3,7 @@ import { View, Text, Alert } from 'react-native';
 import Engine, { Cell, MakeMoveFn, OnMoveFn, State } from '../../game/Engine';
 import { GameMode } from '../WelcomeScreen';
 import GameBoard from './components/GameBoard';
+import getNetworkPlayer, { useNetworkGame } from './players/onNetworkPlayer';
 
 function getEndgameText(winner: Cell): string {
   if (winner === Cell.Empty) {
@@ -36,6 +37,20 @@ export default function GameScreen({ mode }: GameScreenProps) {
   const [currentPlayer, setCurrentPlayer] = useState<Cell.X | Cell.O>();
   const [currentState, setCurrentState] = useState<State>();
   const [winner, setWinner] = useState<Cell>();
+  const {
+    data: initialNetworkGameState,
+    isLoading: isNetworkGameLoading,
+    isError: isNetworkGameError,
+    error: networkGameError
+  } = useNetworkGame(mode === 'pvponline');
+
+  console.log(
+    'initialNetworkGameState',
+    initialNetworkGameState,
+    isNetworkGameLoading,
+    isNetworkGameError,
+    networkGameError
+  );
 
   const onPlayerMove: OnMoveFn = (state, whoAmI, makeMove) => {
     setCurrentState(state);
@@ -47,7 +62,11 @@ export default function GameScreen({ mode }: GameScreenProps) {
     setWinner(winner);
   };
 
-  const [engine] = useState(() => {
+  const [engine, setEngine] = useState(() => {
+    if (mode === 'pvponline') {
+      return;
+    }
+
     const playerTwo = mode === 'pvplocal' ? onPlayerMove : onBotMove;
 
     return new Engine(
@@ -59,13 +78,27 @@ export default function GameScreen({ mode }: GameScreenProps) {
   });
 
   useEffect(() => {
+    if (!engine) return;
+
     engine.startGame();
     setCurrentState(engine.getState());
   }, [engine]);
 
+  useEffect(() => {
+    if (!initialNetworkGameState) return;
+
+    setEngine(new Engine(
+      onPlayerMove,
+      getNetworkPlayer(initialNetworkGameState.playerId),
+      onGameEnd,
+      initialNetworkGameState.messages[0]?.type === 'first-move' ? Cell.X : Cell.O,
+    ));
+  }, [initialNetworkGameState]);
+
   const onCellPress = (x: number, y: number) => {
     try {
       currentPlayerMakeMove?.(x, y);
+      setCurrentState(engine?.getState());
     } catch (err) {
       if (err instanceof Error) {
         Alert.alert('Некорректный ход', err.message || err.toString());
