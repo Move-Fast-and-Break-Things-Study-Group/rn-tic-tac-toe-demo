@@ -48,9 +48,12 @@ export type State = Cell[][];
 
 export type MakeMoveFn = (x: number, y: number) => void;
 
-export type OnMoveFn = (state: State, whoAmI: Cell.X | Cell.O, makeMove: MakeMoveFn) => void;
-
-type OnEndFn = (winner: Cell) => void;
+export type OnMoveFn = (
+  state: State,
+  whoAmI: Cell.X | Cell.O,
+  makeMove: MakeMoveFn,
+  winner: Cell | undefined,
+) => void;
 
 type PlayerSide = Cell.X | Cell.O | 'random';
 
@@ -61,12 +64,10 @@ export default class Engine {
   private isOver: boolean;
   private onPlayerXMove: OnMoveFn;
   private onPlayerOMove: OnMoveFn;
-  private onGameEnd: OnEndFn;
 
   constructor(
     onPlayerOneMove: OnMoveFn,
     onPlayerTwoMove: OnMoveFn,
-    onGameEnd: OnEndFn,
     playerOneSide: PlayerSide = Cell.X
   ) {
     this.state = [
@@ -88,8 +89,6 @@ export default class Engine {
       this.onPlayerXMove = onPlayerTwoMove;
       this.onPlayerOMove = onPlayerOneMove;
     }
-
-    this.onGameEnd = onGameEnd;
   }
 
   getState(): State {
@@ -102,7 +101,7 @@ export default class Engine {
 
   startGame() {
     const playerXMakeMove = this.getMakeMoveFn(Cell.X);
-    this.onPlayerXMove(this.state, Cell.X, playerXMakeMove);
+    this.onPlayerXMove(this.state, Cell.X, playerXMakeMove, undefined);
   }
 
   private isGameOver(): { isOver: true, winner: Cell } | { isOver: false, winner?: undefined } {
@@ -174,18 +173,16 @@ export default class Engine {
     this.state[x][y] = type;
     
     const { isOver, winner } = this.isGameOver();
-    if (isOver) {
-      this.isOver = true;
-      this.onGameEnd(winner);
-      return;
-    }
+    this.isOver = isOver;
 
-    if (type === Cell.X) {
+    // Если игра окончена, то вызываем обработчики ходов обоих игроков
+    if (type === Cell.X || isOver) {
       const playerOMakeMove = this.getMakeMoveFn(Cell.O);
-      this.onPlayerOMove(this.state, Cell.O, playerOMakeMove);
-    } else {
+      this.onPlayerOMove(this.state, Cell.O, playerOMakeMove, winner);
+    }
+    if (type === Cell.O || isOver) {
       const playerXMakeMove = this.getMakeMoveFn(Cell.X);
-      this.onPlayerXMove(this.state, Cell.X, playerXMakeMove);
+      this.onPlayerXMove(this.state, Cell.X, playerXMakeMove, winner);
     }
   }
 }

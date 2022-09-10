@@ -13,7 +13,11 @@ function getEndgameText(winner: Cell): string {
   }
 }
 
-const onBotMove: OnMoveFn = (state, whoAmI, makeMove) => {
+const onBotMove: OnMoveFn = (state, whoAmI, makeMove, winner) => {
+  if (winner !== undefined) {
+    return;
+  }
+
   const emptyCells = [];
   for (let x = 0; x < Engine.BOARD_SIZE; x++) {
     for (let y = 0; y < Engine.BOARD_SIZE; y++) {
@@ -52,13 +56,10 @@ export default function GameScreen({ mode }: GameScreenProps) {
     networkGameError
   );
 
-  const onPlayerMove: OnMoveFn = (state, whoAmI, makeMove) => {
+  const onPlayerMove: OnMoveFn = (state, whoAmI, makeMove, winner) => {
     setCurrentState(state);
     setCurrentPlayer(whoAmI);
     setCurrentPlayerMakeMove(() => makeMove);
-  };
-
-  const onGameEnd = (winner: Cell) => {
     setWinner(winner);
   };
 
@@ -66,15 +67,8 @@ export default function GameScreen({ mode }: GameScreenProps) {
     if (mode === 'pvponline') {
       return;
     }
-
     const playerTwo = mode === 'pvplocal' ? onPlayerMove : onBotMove;
-
-    return new Engine(
-      onPlayerMove,
-      playerTwo,
-      onGameEnd,
-      'random'
-    );
+    return new Engine(onPlayerMove, playerTwo, 'random');
   });
 
   useEffect(() => {
@@ -90,7 +84,6 @@ export default function GameScreen({ mode }: GameScreenProps) {
     setEngine(new Engine(
       onPlayerMove,
       getNetworkPlayer(initialNetworkGameState.playerId),
-      onGameEnd,
       initialNetworkGameState.messages[0]?.type === 'first-move' ? Cell.X : Cell.O,
     ));
   }, [initialNetworkGameState]);
